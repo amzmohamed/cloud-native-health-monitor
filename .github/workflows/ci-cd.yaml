@@ -43,12 +43,12 @@ jobs:
         with:
           context: .
           load: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/cloud-native-health-monitor:scan
+          tags: amrzakaria101/cloud-native-health-monitor:scan
 
       - name: Run Trivy Security Vulnerability Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/cloud-native-health-monitor:scan
+          image-ref: amrzakaria101/cloud-native-health-monitor:scan
           format: 'table'
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
@@ -56,7 +56,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: amrzakaria101
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and Push Production Image
@@ -65,5 +65,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/cloud-native-health-monitor:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/cloud-native-health-monitor:${{ github.sha }}
+            amrzakaria101/cloud-native-health-monitor:latest
+            amrzakaria101/cloud-native-health-monitor:${{ github.sha }}
