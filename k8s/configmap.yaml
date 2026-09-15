@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitor-config
+data:
+  TARGET_JSON_URL: "https://httpbin.org/json"
+  TARGET_XML_URL: "https://httpbin.org/xml"
+  POLL_INTERVAL_SECONDS: "10"
