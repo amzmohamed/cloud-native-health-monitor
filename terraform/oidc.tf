@@ -24,7 +24,10 @@ resource "aws_iam_role" "github_actions_role" {
             "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" : "*cloud-native-health-monitor*"
+            "token.actions.githubusercontent.com:sub" : [
+              "repo:amzmohamed/cloud-native-health-monitor:*",
+              "repo:AmzMohamed/cloud-native-health-monitor:*"
+            ]
           }
         }
       }
