@@ -1,10 +1,14 @@
-name: CI/CD Pipeline
+﻿name: CI/CD Pipeline
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+
+permissions:
+  id-token: write   # Required for AWS OIDC authentication
+  contents: read    # Required for actions/checkout
 
 jobs:
   test-and-lint:
@@ -59,7 +63,17 @@ jobs:
           username: amrzakaria101
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Production Image
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::471112875192:role/github-actions-health-monitor-role
+          aws-region: eu-central-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Production Images (Docker Hub & AWS ECR)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -67,3 +81,5 @@ jobs:
           tags: |
             amrzakaria101/cloud-native-health-monitor:latest
             amrzakaria101/cloud-native-health-monitor:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/cloud-native-health-monitor:latest
+            ${{ steps.login-ecr.outputs.registry }}/cloud-native-health-monitor:${{ github.sha }}
