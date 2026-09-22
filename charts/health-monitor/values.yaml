@@ -1,0 +1,43 @@
+﻿replicaCount: 2
+
+image:
+  repository: 471112875192.dkr.ecr.eu-central-1.amazonaws.com/cloud-native-health-monitor
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets:
+  - name: ecr-secret
+
+service:
+  type: ClusterIP
+  port: 8080
+  name: http
+
+ingress:
+  enabled: true
+  className: nginx
+  host: health-monitor.local
+  path: /
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /ready
+    initialDelaySeconds: 3
+    periodSeconds: 5
+
+config:
+  TARGET_ENDPOINTS: "https://httpbin.org/json,https://httpbin.org/xml"
+  CHECK_INTERVAL_SECONDS: "30"
+  TIMEOUT_SECONDS: "5"
