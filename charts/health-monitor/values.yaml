@@ -3,7 +3,7 @@
 image:
   repository: 471112875192.dkr.ecr.eu-central-1.amazonaws.com/cloud-native-health-monitor
   pullPolicy: Always
-  tag: "latest"
+  tag: "197981043c9cd87ae5a8971cee09fe4a412ec168"
 
 imagePullSecrets:
   - name: ecr-secret
