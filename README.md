@@ -1,90 +1,152 @@
-# Cloud-Native Health Monitor Microservice
+# Cloud-Native Health Monitor
 
-[![CI/CD Pipeline](https://github.com/amzmohamed/cloud-native-health-monitor/actions/workflows/ci-cd.yaml/badge.svg)](https://github.com/amzmohamed/cloud-native-health-monitor/actions)
-![Docker](https://img.shields.io/badge/docker-multi--stage-blue)
-![Kubernetes](https://img.shields.io/badge/kubernetes-declarative-326CE5)
-![Prometheus](https://img.shields.io/badge/metrics-prometheus-E6522C)
-![Python](https://img.shields.io/badge/python-3.11-3776AB)
-
-A lightweight, production-grade telemetry microservice built in Python (FastAPI) that continuously monitors external JSON and XML API endpoints, validates data contracts and payload schemas, and exposes standard Prometheus metrics for SLA and reliability monitoring.
+A production-grade, GitOps-driven microservice and infrastructure platform demonstrating automated delivery, shift-left container security, and modular Infrastructure as Code (IaC) on Kubernetes and AWS.
 
 ---
 
 ## Architecture Overview
 
+```mermaid
+graph TD
+    Dev[Developer] -->|git push origin main| GHA[GitHub Actions CI/CD]
+
+    subgraph "CI & Security Pipeline"
+        GHA -->|1. Test| Pytest[Pytest Test Suite]
+        GHA -->|2. Scan| Trivy[Trivy Vulnerability Scanner]
+        GHA -->|3. Authenticate| OIDC[AWS IAM OIDC Role]
+        GHA -->|4. Push Image| ECR[Amazon ECR / Docker Hub]
+        GHA -->|5. Update values.yaml| GitOpsCommit[Automated Git SHA Commit]
+    end
+
+    subgraph "Continuous Delivery & Cluster Runtime"
+        GitOpsCommit -->|Triggers Webhook / Poll| ArgoCD[Argo CD GitOps Controller]
+        ArgoCD -->|Syncs Declarative State| Helm[Helm Chart Engine]
+        Helm -->|Deploys / Reconciles| K8s[Kubernetes Cluster / Minikube / EKS]
+        
+        subgraph "Kubernetes Workloads"
+            Ingress[NGINX Ingress Controller] -->|Routes Host Traffic| Svc[ClusterIP Service: 8080]
+            Svc --> Pod1[FastAPI Pod Replica 1]
+            Svc --> Pod2[FastAPI Pod Replica 2]
+            Prometheus[Prometheus Server] -.->|Scrapes /metrics| Pod1
+            Prometheus -.->|Scrapes /metrics| Pod2
+        end
+    end
+
+    subgraph "Infrastructure as Code (Terraform)"
+        TF[Terraform Modules] -->|Provisions| VPC[AWS VPC Dual-AZ + NAT Gateway]
+        TF -->|Provisions| EKS[Amazon EKS 1.30 Cluster]
+        TF -->|Configures| IRSA[IAM OIDC Provider for Pods]
+    end
+```
+
+---
+
+## Key Technical Features
+
+* **Microservice Architecture:** FastAPI-based asynchronous HTTP health monitor polling configured endpoints with configurable timeouts, exporting native Prometheus metrics (`/metrics`), liveness probes (`/healthz`), and readiness probes (`/ready`).
+* **Shift-Left Security:** Automated Trivy container vulnerability scanning in GitHub Actions configured to catch `HIGH` and `CRITICAL` CVEs before image publication.
+* **Keyless AWS Authentication:** Pipeline uses GitHub Actions OIDC federation to assume IAM roles dynamically, eliminating long-lived AWS Access Keys.
+* **Declarative Packaging:** Parameterized Helm chart supporting configurable replica counts, CPU/memory resource requests and limits, ingress hosts, and environment overrides.
+* **GitOps Continuous Delivery:** Argo CD manages cluster state with automated synchronization, self-healing, and automated pruning. The CI pipeline patches `charts/health-monitor/values.yaml` with the exact Git commit SHA on every release, achieving zero-touch rolling updates.
+* **Modular Infrastructure as Code:** Terraform configuration structuring a dedicated multi-AZ AWS VPC with public/private subnets, managed NAT Gateway, Kubernetes ELB discovery tagging, managed EKS node groups, and IAM Roles for Service Accounts (IRSA).
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Application Runtime** | Python 3.11, FastAPI, Uvicorn, Requests |
+| **Observability** | Prometheus Client Library, Kubernetes Probes |
+| **Containerization** | Docker, Multi-stage Slim Builds |
+| **Security Scanning** | Aqua Security Trivy, AWS IAM OIDC |
+| **Packaging & Ingress** | Helm v3, NGINX Ingress Controller |
+| **Continuous Delivery** | Argo CD (GitOps), GitHub Actions |
+| **Cloud Infrastructure** | AWS (VPC, Subnets, NAT, ECR, EKS 1.30, IAM, IRSA), Terraform |
+
+---
+
+## Repository Structure
+
 ```text
-                        +----------------------------+
-                        |  Kubernetes Cluster        |
-                        |                            |
-  Incoming Traffic ---> |  Ingress (monitor.local)   |
-                        +--------------+-------------+
-                                       |
-                                       v
-                        +--------------+-------------+
-                        |  ClusterIP Service (:8080) |
-                        +--------------+-------------+
-                                       |
-                                       v
-                        +----------------------------+
-                        |  Deployment (2 Replicas)   |
-                        |  - Non-root user (10001)   |
-                        |  - ConfigMap driven        |
-                        |  - Health Probes (L/R)     |
-                        +--------------+-------------+
-                                       |
-                  +--------------------+--------------------+
-                  |                                         |
-                  v                                         v
-       +--------------------+                    +--------------------+
-       |  Target JSON API   |                    |  Target XML API    |
-       +--------------------+                    +--------------------+
+├── .github/workflows/
+│   └── ci-cd.yaml             # CI pipeline: Pytest, Trivy scan, ECR push, GitOps commit
+├── app/
+│   ├── main.py                # FastAPI microservice logic & Prometheus metrics
+│   ├── monitor.py             # Asynchronous endpoint health checker
+│   ├── requirements.txt       # Production dependencies
+│   └── test_requirements.txt  # Testing dependencies
+├── charts/
+│   └── health-monitor/        # Parameterized Helm chart
+│       ├── Chart.yaml
+│       ├── values.yaml        # Dynamically patched by CI pipeline
+│       └── templates/         # Deployment, Service, Ingress, ConfigMap manifests
+├── argocd/
+│   └── application.yaml       # Argo CD declarative application manifest
+├── terraform/
+│   ├── modules/
+│   │   ├── vpc/               # Reusable VPC, NAT, Route Tables, and Subnet module
+│   │   └── eks/               # EKS cluster, Managed Node Group, and OIDC module
+│   └── environments/
+│       └── dev/               # Environment composition and provider definitions
+└── tests/
+    └── test_main.py           # Unit and mock integration test suite
 ```
 
 ---
 
-## Core Features
+## Local Quick Start
 
-* **Multi-Format Ingestion:** Actively polls and validates both JSON payloads and XML schemas using secure parsers (`defusedxml`).
-* **Prometheus Metrics Exporter:** Exposes operational telemetry at `/metrics`, including endpoint availability (`endpoint_up`), request latency (`endpoint_latency_seconds`), and categorized schema validation failures (`endpoint_validation_failures_total`).
-* **Hardened Multi-Stage Container:** Built on `python:3.11-slim` using multi-stage compilation and executed under an unprivileged, non-root user (`UID 10001`).
-* **Production Kubernetes Manifests:** Complete declarative configurations with resource constraints (`limits`/`requests`), ConfigMap environment decoupling, liveness/readiness probes, and Ingress routing.
-* **Automated CI/CD:** GitHub Actions workflow executing automated `pytest` suites, Trivy container security vulnerability scanning, and multi-architecture Docker Hub publishing.
+### 1. Prerequisites
+* Docker Desktop & Minikube installed
+* Helm v3 CLI installed
+* kubectl and AWS CLI configured
+
+### 2. Deploy Locally via Helm & Ingress
+```powershell
+# Start Minikube & Enable Ingress
+minikube start
+minikube addons enable ingress
+
+# In a separate admin window, start tunnel:
+minikube tunnel
+
+# Deploy the Helm Chart
+helm upgrade --install health-monitor ./charts/health-monitor
+
+# Verify ingress routing
+curl -H "Host: health-monitor.local" [http://127.0.0.1/healthz](http://127.0.0.1/healthz)
+```
+
+### 3. Deploy via Argo CD (GitOps)
+```powershell
+# Install Argo CD
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side -f [https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml](https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml)
+
+# Apply the GitOps Application
+kubectl apply -f argocd/application.yaml
+
+# Port-forward the web UI
+kubectl port-forward svc/argocd-server -n argocd 8443:443
+```
 
 ---
 
-## Endpoints
+## Provisioning Cloud Infrastructure (Terraform)
 
-| Path | Method | Purpose |
-| :--- | :--- | :--- |
-| `/healthz` | GET | Liveness probe returning application runtime status |
-| `/ready` | GET | Readiness probe for upstream traffic routing |
-| `/metrics` | GET | Prometheus telemetry scrape endpoint |
+```powershell
+cd terraform/environments/dev
 
----
+# Initialize providers and modules
+terraform init
 
-## Quickstart
+# Review execution plan
+terraform plan
 
-### Local Development
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: .\venv\Scripts\Activate.ps1
-pip install -r app/requirements.txt
-pytest tests/ -v
-uvicorn app.main:app --host 0.0.0.0 --port 8080
-```
+# (Optional) Apply to AWS EKS
+terraform apply -auto-approve
 
-### Docker Execution
-```bash
-docker build -t cloud-native-health-monitor:latest .
-docker run -d -p 8080:8080 --name health-monitor cloud-native-health-monitor:latest
-curl http://localhost:8080/healthz
-curl http://localhost:8080/metrics
-```
-
-### Kubernetes Deployment
-```bash
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-kubectl apply -f k8s/ingress.yaml
+# Tear down infrastructure
+terraform destroy -auto-approve
 ```
