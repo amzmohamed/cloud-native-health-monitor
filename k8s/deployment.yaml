@@ -1,4 +1,4 @@
-apiVersion: apps/v1
+﻿apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloud-native-health-monitor
@@ -25,7 +25,7 @@ spec:
         fsGroup: 10001
       containers:
         - name: monitor
-          image: amrzakaria101/cloud-native-health-monitor:latest
+          image: 471112875192.dkr.ecr.eu-central-1.amazonaws.com/cloud-native-health-monitor:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
