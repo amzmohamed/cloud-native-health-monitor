@@ -13,34 +13,38 @@ spec:
     metadata:
       labels:
         app: health-monitor
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+        prometheus.io/scrape: "true"
     spec:
       imagePullSecrets:
         - name: ecr-secret
       containers:
-        - name: health-monitor
+        - name: monitor
           image: 471112875192.dkr.ecr.eu-central-1.amazonaws.com/cloud-native-health-monitor:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 5000
+            - containerPort: 8080
           envFrom:
             - configMapRef:
                 name: monitor-config
           resources:
             requests:
               cpu: "100m"
-              memory: "64Mi"
-            limits:
-              cpu: "250m"
               memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
           livenessProbe:
             httpGet:
-              path: /health
-              port: 5000
-            initialDelaySeconds: 10
-            periodSeconds: 15
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 5000
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
