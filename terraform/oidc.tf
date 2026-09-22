@@ -26,7 +26,10 @@ resource "aws_iam_role" "github_actions_role" {
           StringLike = {
             "token.actions.githubusercontent.com:sub" : [
               "repo:amzmohamed/cloud-native-health-monitor:*",
-              "repo:AmzMohamed/cloud-native-health-monitor:*"
+              "repo:amzmohamed@*/cloud-native-health-monitor@*:*",
+              "repo:amzmohamed*/*cloud-native-health-monitor*:*",
+              "repo:amzmohamed/*",
+              "repo:amzmohamed@*/*"
             ]
           }
         }
