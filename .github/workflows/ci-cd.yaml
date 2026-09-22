@@ -8,7 +8,7 @@ on:
 
 permissions:
   id-token: write   # Required for AWS OIDC authentication
-  contents: read    # Required for actions/checkout
+  contents: write   # Required to commit GitOps values back to repository
 
 jobs:
   test-and-lint:
@@ -38,6 +38,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,3 +85,11 @@ jobs:
             amrzakaria101/cloud-native-health-monitor:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/cloud-native-health-monitor:latest
             ${{ steps.login-ecr.outputs.registry }}/cloud-native-health-monitor:${{ github.sha }}
+
+      - name: Update Helm Chart Image Tag and Commit (GitOps)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          sed -i 's/tag: .*/tag: "${{ github.sha }}"/' charts/health-monitor/values.yaml
+          git add charts/health-monitor/values.yaml
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore(gitops): update image tag to ${{ github.sha }} [skip ci]" && git push origin main)
