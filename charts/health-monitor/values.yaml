@@ -41,3 +41,23 @@ config:
   TARGET_ENDPOINTS: "https://httpbin.org/json,https://httpbin.org/xml"
   CHECK_INTERVAL_SECONDS: "30"
   TIMEOUT_SECONDS: "5"
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  labels:
+    release: prometheus
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

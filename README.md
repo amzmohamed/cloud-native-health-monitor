@@ -1,6 +1,6 @@
 # Cloud-Native Health Monitor
 
-A production-grade, GitOps-driven microservice and platform repository demonstrating non-blocking asynchronous telemetry polling, hardened container security, modular Infrastructure as Code (IaC) on AWS EKS 1.32, and native Prometheus Operator observability.
+A production-grade, GitOps-driven microservice and platform repository demonstrating non-blocking asynchronous telemetry polling, hardened container security, modular Infrastructure as Code (IaC) on AWS EKS 1.35, and native Prometheus Operator observability.
 
 ---
 
@@ -21,7 +21,7 @@ graph TD
     subgraph "Continuous Delivery & Cluster Runtime"
         GitOpsCommit -->|Syncs Declarative State| ArgoCD[Argo CD GitOps Controller]
         ArgoCD -->|Reconciles Helm Chart| Helm[Helm Engine]
-        Helm -->|Deploys to Cluster| K8s[Amazon EKS 1.32 / Local Cluster]
+        Helm -->|Deploys to Cluster| K8s[Amazon EKS 1.35 / Local Cluster]
 
         subgraph "Kubernetes Workloads & Observability"
             Ingress[NGINX Ingress] -->|Routes Traffic| Svc[ClusterIP Service: 8080]
@@ -36,7 +36,7 @@ graph TD
 
     subgraph "Infrastructure as Code (Terraform)"
         TF[Terraform Modules] -->|Provisions| VPC[AWS VPC Dual-AZ + NAT Gateway]
-        TF -->|Provisions| EKS[Amazon EKS 1.32 Cluster]
-        TF -->|Remote State| S3[Encrypted S3 Bucket + DynamoDB State Locking]
+        TF -->|Provisions| EKS[Amazon EKS 1.35 Cluster]
+        TF -->|Remote State| S3[Encrypted S3 Bucket + Native S3 State Locking]
         TF -->|Configures| IRSA[IAM OIDC Provider for Pods]
     end
