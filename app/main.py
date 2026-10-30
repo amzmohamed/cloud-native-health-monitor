@@ -1,35 +1,35 @@
-import os
-import threading
-import time
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from app.monitor import check_json_endpoint, check_xml_endpoint
 
-app = FastAPI(title="Cloud-Native Health Monitor")
+try:
+    from app.monitor import start_polling_loop
+except ImportError:
+    from monitor import start_polling_loop
 
-TARGET_JSON = os.getenv("TARGET_JSON_URL", "https://httpbin.org/json")
-TARGET_XML = os.getenv("TARGET_XML_URL", "https://httpbin.org/xml")
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "15"))
+TARGET_URLS = ["https://httpbin.org/status/200", "https://httpbin.org/status/500"]
 
-def monitor_loop():
-    while True:
-        check_json_endpoint(TARGET_JSON, expected_key="slideshow")
-        check_xml_endpoint(TARGET_XML, expected_tag="slideshow")
-        time.sleep(POLL_INTERVAL)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    polling_task = asyncio.create_task(start_polling_loop(TARGET_URLS, interval_seconds=15))
+    yield
+    polling_task.cancel()
+    try:
+        await polling_task
+    except asyncio.CancelledError:
+        pass
 
-@app.on_event("startup")
-def start_poller():
-    thread = threading.Thread(target=monitor_loop, daemon=True)
-    thread.start()
+app = FastAPI(title="Cloud Native Health Monitor", lifespan=lifespan)
 
 @app.get("/healthz")
-def liveness():
+async def liveness():
     return {"status": "healthy"}
 
 @app.get("/ready")
-def readiness():
+async def readiness():
     return {"status": "ready"}
 
 @app.get("/metrics")
-def metrics():
+async def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

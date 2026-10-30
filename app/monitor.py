@@ -1,60 +1,46 @@
-import time
-import requests
-import defusedxml.ElementTree as ET
-from prometheus_client import Counter, Gauge
+import asyncio
+import logging
+import httpx
+from prometheus_client import Counter, Gauge, Histogram
 
-ENDPOINT_UP = Gauge("endpoint_up", "Status of target endpoint (1 = UP, 0 = DOWN)", ["target"])
-ENDPOINT_LATENCY = Gauge("endpoint_latency_seconds", "HTTP request latency in seconds", ["target"])
-CHECK_FAILURES = Counter("endpoint_validation_failures_total", "Count of failed payload validations", ["target", "reason"])
+logger = logging.getLogger("health-monitor")
 
-def check_json_endpoint(url: str, expected_key: str, timeout: float = 3.0) -> bool:
-    start_time = time.time()
+ENDPOINT_HEALTH = Gauge(
+    "endpoint_up", 
+    "Health status of monitored endpoint (1 = UP, 0 = DOWN)", 
+    ["endpoint"]
+)
+ENDPOINT_RESPONSE_TIME = Histogram(
+    "endpoint_response_time_seconds", 
+    "Response latency for monitored endpoint", 
+    ["endpoint"]
+)
+ENDPOINT_CHECKS_TOTAL = Counter(
+    "endpoint_checks_total", 
+    "Total check iterations executed", 
+    ["endpoint", "status"]
+)
+
+async def check_target(client: httpx.AsyncClient, url: str, timeout: float = 5.0) -> None:
     try:
-        response = requests.get(url, timeout=timeout)
-        latency = time.time() - start_time
-        ENDPOINT_LATENCY.labels(target=url).set(latency)
+        with ENDPOINT_RESPONSE_TIME.labels(endpoint=url).time():
+            response = await client.get(url, timeout=timeout)
+            
+        if response.status_code == 200:
+            ENDPOINT_HEALTH.labels(endpoint=url).set(1)
+            ENDPOINT_CHECKS_TOTAL.labels(endpoint=url, status="success").inc()
+        else:
+            ENDPOINT_HEALTH.labels(endpoint=url).set(0)
+            ENDPOINT_CHECKS_TOTAL.labels(endpoint=url, status=f"http_{response.status_code}").inc()
+    except httpx.RequestError as exc:
+        logger.warning(f"Connection failed for {url}: {exc}")
+        ENDPOINT_HEALTH.labels(endpoint=url).set(0)
+        ENDPOINT_CHECKS_TOTAL.labels(endpoint=url, status="connection_error").inc()
 
-        if response.status_code != 200:
-            ENDPOINT_UP.labels(target=url).set(0)
-            CHECK_FAILURES.labels(target=url, reason="http_error").inc()
-            return False
-
-        data = response.json()
-        if expected_key not in data:
-            ENDPOINT_UP.labels(target=url).set(0)
-            CHECK_FAILURES.labels(target=url, reason="schema_mismatch").inc()
-            return False
-
-        ENDPOINT_UP.labels(target=url).set(1)
-        return True
-    except Exception:
-        ENDPOINT_LATENCY.labels(target=url).set(time.time() - start_time)
-        ENDPOINT_UP.labels(target=url).set(0)
-        CHECK_FAILURES.labels(target=url, reason="unreachable").inc()
-        return False
-
-def check_xml_endpoint(url: str, expected_tag: str, timeout: float = 3.0) -> bool:
-    start_time = time.time()
-    try:
-        response = requests.get(url, timeout=timeout)
-        latency = time.time() - start_time
-        ENDPOINT_LATENCY.labels(target=url).set(latency)
-
-        if response.status_code != 200:
-            ENDPOINT_UP.labels(target=url).set(0)
-            CHECK_FAILURES.labels(target=url, reason="http_error").inc()
-            return False
-
-        root = ET.fromstring(response.content)
-        if root.find(f".//{expected_tag}") is None and root.tag != expected_tag:
-            ENDPOINT_UP.labels(target=url).set(0)
-            CHECK_FAILURES.labels(target=url, reason="xml_tag_missing").inc()
-            return False
-
-        ENDPOINT_UP.labels(target=url).set(1)
-        return True
-    except Exception:
-        ENDPOINT_LATENCY.labels(target=url).set(time.time() - start_time)
-        ENDPOINT_UP.labels(target=url).set(0)
-        CHECK_FAILURES.labels(target=url, reason="unreachable").inc()
-        return False
+async def start_polling_loop(endpoints: list[str], interval_seconds: int = 15):
+    """Asynchronous background loop keeping the FastAPI event loop unblocked."""
+    async with httpx.AsyncClient() as client:
+        while True:
+            tasks = [check_target(client, url) for url in endpoints]
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.sleep(interval_seconds)
